@@ -1,16 +1,7 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package com.bekvon.bukkit.residence.economy;
 
 import fr.crafter.tickleman.realeconomy.RealEconomy;
 
-/**
- * 
- * @author Administrator
- */
 public class RealShopEconomy implements EconomyInterface {
 
     RealEconomy plugin;

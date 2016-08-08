@@ -1,8 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package com.bekvon.bukkit.residence.vaultinterface;
 
 import com.bekvon.bukkit.residence.economy.EconomyInterface;
@@ -10,14 +5,12 @@ import com.bekvon.bukkit.residence.permissions.PermissionsInterface;
 import net.milkbowl.vault.chat.Chat;
 import net.milkbowl.vault.economy.Economy;
 import net.milkbowl.vault.permission.Permission;
+
+import org.bukkit.OfflinePlayer;
 import org.bukkit.Server;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.RegisteredServiceProvider;
 
-/**
- * 
- * @author Administrator
- */
 public class ResidenceVaultAdapter implements EconomyInterface, PermissionsInterface {
 
     public static Permission permissions = null;
@@ -25,125 +18,139 @@ public class ResidenceVaultAdapter implements EconomyInterface, PermissionsInter
     public static Chat chat = null;
 
     public boolean permissionsOK() {
-        if (permissions != null && !permissions.getName().equalsIgnoreCase("SuperPerms")) {
-            return true;
-        }
-        return false;
+	if (permissions != null && !permissions.getName().equalsIgnoreCase("SuperPerms")) {
+	    return true;
+	}
+	return false;
     }
 
     public boolean economyOK() {
-        return economy != null;
+	return economy != null;
     }
 
     public boolean chatOK() {
-        return chat != null;
+	return chat != null;
     }
 
     public ResidenceVaultAdapter(Server s) {
-        this.setupPermissions(s);
-        this.setupEconomy(s);
-        this.setupChat(s);
+	setupPermissions(s);
+	setupEconomy(s);
+	setupChat(s);
     }
 
-    private boolean setupPermissions(Server s) {
-        RegisteredServiceProvider<Permission> permissionProvider = s.getServicesManager().getRegistration(net.milkbowl.vault.permission.Permission.class);
-        if (permissionProvider != null) {
-            permissions = permissionProvider.getProvider();
-        }
-        return (permissions != null);
+    private static boolean setupPermissions(Server s) {
+	RegisteredServiceProvider<Permission> permissionProvider = s.getServicesManager().getRegistration(net.milkbowl.vault.permission.Permission.class);
+	if (permissionProvider != null) {
+	    permissions = permissionProvider.getProvider();
+	}
+	return (permissions != null);
     }
 
-    private boolean setupChat(Server s) {
-        RegisteredServiceProvider<Chat> chatProvider = s.getServicesManager().getRegistration(net.milkbowl.vault.chat.Chat.class);
-        if (chatProvider != null) {
-            chat = chatProvider.getProvider();
-        }
-        return (chat != null);
+    private static boolean setupChat(Server s) {
+	RegisteredServiceProvider<Chat> chatProvider = s.getServicesManager().getRegistration(net.milkbowl.vault.chat.Chat.class);
+	if (chatProvider != null) {
+	    chat = chatProvider.getProvider();
+	}
+	return (chat != null);
     }
 
-    private boolean setupEconomy(Server s) {
-        RegisteredServiceProvider<Economy> economyProvider = s.getServicesManager().getRegistration(net.milkbowl.vault.economy.Economy.class);
-        if (economyProvider != null) {
-            economy = economyProvider.getProvider();
-        }
-        return (economy != null);
+    private static boolean setupEconomy(Server s) {
+	RegisteredServiceProvider<Economy> economyProvider = s.getServicesManager().getRegistration(net.milkbowl.vault.economy.Economy.class);
+	if (economyProvider != null) {
+	    economy = economyProvider.getProvider();
+	}
+	return (economy != null);
     }
 
+    @Override
     public String getPlayerGroup(Player player) {
-        String group = permissions.getPrimaryGroup(player).toLowerCase();
-        if (group == null) {
-            return group;
-        } else {
-            return group.toLowerCase();
-        }
+	String group = permissions.getPrimaryGroup(player).toLowerCase();
+	if (group == null) {
+	    return group;
+	}
+	return group.toLowerCase();
     }
 
+    @Override
     public String getPlayerGroup(String player, String world) {
-        String group = permissions.getPrimaryGroup(world, player);
-        if (group == null) {
-            return group;
-        } else {
-            return group.toLowerCase();
-        }
+	@SuppressWarnings("deprecation")
+	String group = permissions.getPrimaryGroup(world, player);
+	if (group == null) {
+	    return group;
+	}
+	return group.toLowerCase();
     }
 
+    public static boolean hasPermission(OfflinePlayer player, String perm, String world) {
+	if (permissions == null)
+	    return false;
+	try {
+	    return permissions.playerHas(world, player, perm);
+	} catch (Exception e) {
+	    return false;
+	}
+    }
+
+    @SuppressWarnings("deprecation")
     @Override
     public double getBalance(String playerName) {
-        return economy.getBalance(playerName);
+	return economy.getBalance(playerName);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public boolean canAfford(String playerName, double amount) {
-        return economy.has(playerName, amount);
+	return economy.has(playerName, amount);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public boolean add(String playerName, double amount) {
-        return economy.depositPlayer(playerName, amount).transactionSuccess();
+	return economy.depositPlayer(playerName, amount).transactionSuccess();
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public boolean subtract(String playerName, double amount) {
-        return economy.withdrawPlayer(playerName, amount).transactionSuccess();
+	return economy.withdrawPlayer(playerName, amount).transactionSuccess();
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public boolean transfer(String playerFrom, String playerTo, double amount) {
-        if (economy.withdrawPlayer(playerFrom, amount).transactionSuccess()) {
-            if (economy.depositPlayer(playerTo, amount).transactionSuccess()) {
-                return true;
-            } else {
-                economy.depositPlayer(playerFrom, amount);
-                return false;
-            }
-        } else {
-            return false;
-        }
+	if (economy.withdrawPlayer(playerFrom, amount).transactionSuccess()) {
+	    if (economy.depositPlayer(playerTo, amount).transactionSuccess()) {
+		return true;
+	    }
+	    economy.depositPlayer(playerFrom, amount);
+	    return false;
+	}
+	return false;
     }
 
     public String getEconomyName() {
-        if (economy != null) {
-            return economy.getName();
-        }
-        return "";
+	if (economy != null) {
+	    return economy.getName();
+	}
+	return "";
     }
 
     public String getPermissionsName() {
-        if (permissions != null) {
-            return permissions.getName();
-        }
-        return "";
+	if (permissions != null) {
+	    return permissions.getName();
+	}
+	return "";
     }
 
     public String getChatName() {
-        if (chat != null) {
-            return chat.getName();
-        }
-        return "";
+	if (chat != null) {
+	    return chat.getName();
+	}
+	return "";
     }
 
+    @Override
     public String getName() {
-        return "Vault";
+	return "Vault";
     }
-
 }

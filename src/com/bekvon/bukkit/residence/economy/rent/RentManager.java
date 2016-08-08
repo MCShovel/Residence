@@ -1,495 +1,935 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package com.bekvon.bukkit.residence.economy.rent;
+
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 
 import com.bekvon.bukkit.residence.Residence;
+import com.bekvon.bukkit.residence.api.MarketRentInterface;
+import com.bekvon.bukkit.residence.containers.ResidencePlayer;
+import com.bekvon.bukkit.residence.containers.lm;
 import com.bekvon.bukkit.residence.event.ResidenceRentEvent;
 import com.bekvon.bukkit.residence.event.ResidenceRentEvent.RentEventType;
 import com.bekvon.bukkit.residence.permissions.PermissionGroup;
 import com.bekvon.bukkit.residence.protection.ClaimedResidence;
+import com.bekvon.bukkit.residence.protection.CuboidArea;
 import com.bekvon.bukkit.residence.protection.FlagPermissions.FlagState;
-import java.util.Date;
+import com.bekvon.bukkit.residence.utils.GetTime;
+
+import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import org.bukkit.entity.Player;
 
-/**
- *
- * @author Administrator
- */
-public class RentManager {
-    protected Map<String,RentedLand> rentedLand;
-    protected Map<String,RentableLand> rentableLand;
+public class RentManager implements MarketRentInterface {
+    private Set<ClaimedResidence> rentedLand;
+    private Set<ClaimedResidence> rentableLand;
 
-    public RentManager()
-    {
-        rentedLand = new HashMap<>();
-        rentableLand = new HashMap<>();
+    public RentManager() {
+	rentedLand = new HashSet<ClaimedResidence>();
+	rentableLand = new HashSet<ClaimedResidence>();
     }
 
-    public void setForRent(Player player, String landName, int amount, int days, boolean repeatable, boolean resadmin)
-    {
-        if(!Residence.getConfigManager().enabledRentSystem())
-        {
-            player.sendMessage(ChatColor.RED+Residence.getLanguage().getPhrase("MarketDisabled"));
-            return;
-        }
-        if(Residence.getTransactionManager().isForSale(landName))
-        {
-            player.sendMessage(ChatColor.RED+Residence.getLanguage().getPhrase("SellRentFail"));
-            return;
-        }
-        ClaimedResidence res = Residence.getResidenceManager().getByName(landName);
-        if(res == null)
-        {
-            player.sendMessage(ChatColor.RED+Residence.getLanguage().getPhrase("InvalidResidence"));
-            return;
-        }
-        if(!resadmin)
-        {
-            if(!res.getPermissions().hasResidencePermission(player, true))
-            {
-                player.sendMessage(ChatColor.RED+Residence.getLanguage().getPhrase("NoPermission"));
-                return;
-            }
-            PermissionGroup group = Residence.getPermissionManager().getGroup(player);
-            if(this.getRentableCount(player.getName()) >= group.getMaxRentables())
-            {
-                player.sendMessage(ChatColor.RED+Residence.getLanguage().getPhrase("ResidenceMaxRent"));
-                return;
-            }
-        }
-        if(!rentableLand.containsKey(landName))
-        {
-            ResidenceRentEvent revent = new ResidenceRentEvent(res,player,RentEventType.RENTABLE);
-            Residence.getServ().getPluginManager().callEvent(revent);
-            if(revent.isCancelled())
-                return;
-            RentableLand newrent = new RentableLand();
-            newrent.days = days;
-            newrent.cost = amount;
-            newrent.repeatable = repeatable;
-            rentableLand.put(landName,newrent);
-            String[] split = landName.split("\\.");
-            if(split.length!=0)
-                player.sendMessage(ChatColor.GREEN+Residence.getLanguage().getPhrase("ResidenceForRentSuccess",ChatColor.YELLOW+split[split.length-1] + ChatColor.GREEN+"."+ChatColor.YELLOW+amount+ChatColor.GREEN+"."+ChatColor.YELLOW+days+ChatColor.GREEN));
-        }
-        else
-        {
-            player.sendMessage(ChatColor.RED+Residence.getLanguage().getPhrase("ResidenceAlreadyRent"));
-        }
+    @Override
+    public RentedLand getRentedLand(String landName) {
+	ClaimedResidence res = Residence.getResidenceManager().getByName(landName);
+	return getRentedLand(res);
     }
 
-    public void rent(Player player, String landName, boolean repeat, boolean resadmin)
-    {
-        if(!Residence.getConfigManager().enabledRentSystem())
-        {
-            player.sendMessage(ChatColor.RED+Residence.getLanguage().getPhrase("RentDisabled"));
-            return;
-        }
-        ClaimedResidence res = Residence.getResidenceManager().getByName(landName);
-        if(res!=null)
-        {
-            if(res.getPermissions().getOwner().equalsIgnoreCase(player.getName()))
-            {
-                player.sendMessage(ChatColor.RED+Residence.getLanguage().getPhrase("OwnerRentFail"));
-                return;
-            }
-        }
-        else
-        {
-            player.sendMessage(ChatColor.RED+Residence.getLanguage().getPhrase("InvalidResidence"));
-            return;
-        }
-        PermissionGroup group = Residence.getPermissionManager().getGroup(player);
-        if(!resadmin && this.getRentCount(player.getName()) >= group.getMaxRents())
-        {
-            player.sendMessage(ChatColor.RED+Residence.getLanguage().getPhrase("ResidenceMaxRent"));
-            return;
-        }
-        if(!this.isForRent(landName))
-        {
-            player.sendMessage(ChatColor.RED+Residence.getLanguage().getPhrase("ResidenceNotForRent"));
-            return;
-        }
-        if(this.isRented(landName))
-        {
-            String[] split = landName.split("\\.");
-            if(split.length!=0)
-                player.sendMessage(Residence.getLanguage().getPhrase("ResidenceAlreadyRented",ChatColor.YELLOW+split[split.length-1] + ChatColor.RED+"."+ChatColor.YELLOW + this.getRentingPlayer(landName)));
-            return;
-        }
-        RentableLand land = rentableLand.get(landName);
-        if(Residence.getEconomyManager().canAfford(player.getName(), land.cost))
-        {
-            ResidenceRentEvent revent = new ResidenceRentEvent(res,player,RentEventType.RENT);
-            Residence.getServ().getPluginManager().callEvent(revent);
-            if(revent.isCancelled())
-                return;
-            if(Residence.getEconomyManager().transfer(player.getName(), res.getPermissions().getOwner(), land.cost))
-            {
-                RentedLand newrent = new RentedLand();
-                newrent.player = player.getName();
-                newrent.startTime = System.currentTimeMillis();
-                newrent.endTime = System.currentTimeMillis() + daysToMs(land.days);
-                newrent.autoRefresh = repeat;
-                rentedLand.put(landName, newrent);
-                res.getPermissions().copyUserPermissions(res.getPermissions().getOwner(), player.getName());
-                res.getPermissions().clearPlayersFlags(res.getPermissions().getOwner());
-                res.getPermissions().setPlayerFlag(player.getName(), "admin", FlagState.TRUE);
-                String[] split = landName.split("\\.");
-                if(split.length!=0)
-                    player.sendMessage(ChatColor.GREEN+Residence.getLanguage().getPhrase("ResidenceRentSuccess",ChatColor.YELLOW + split[split.length-1] + ChatColor.GREEN+"."+ChatColor.YELLOW + land.days + ChatColor.GREEN));
-            }
-            else
-            {
-                player.sendMessage(ChatColor.RED+"Error, unable to transfer money...");
-            }
-        }
-        else
-        {
-            player.sendMessage(ChatColor.RED+Residence.getLanguage().getPhrase("NotEnoughMoney"));
-        }
+    public RentedLand getRentedLand(ClaimedResidence res) {
+	if (res == null)
+	    return null;
+	return res.isRented() ? res.getRentedLand() : null;
     }
 
-    public void removeFromForRent(Player player, String landName, boolean resadmin)
-    {
-        RentedLand rent = rentedLand.get(landName);
-        if(rent == null)
-        {
-            player.sendMessage(ChatColor.RED+Residence.getLanguage().getPhrase("ResidenceNotRented"));
-            return;
-        }
-        if(resadmin || rent.player.equalsIgnoreCase(player.getName()))
-        {
-            ResidenceRentEvent revent = new ResidenceRentEvent(Residence.getResidenceManager().getByName(landName),player,RentEventType.UNRENTABLE);
-            Residence.getServ().getPluginManager().callEvent(revent);
-            if(revent.isCancelled())
-                return;
-            rentedLand.remove(landName);
-            if(!rentableLand.get(landName).repeatable)
-            {
-                rentableLand.remove(landName);
-            }
-            ClaimedResidence res = Residence.getResidenceManager().getByName(landName);
-            if(res!=null)
-                res.getPermissions().applyDefaultFlags();
-            player.sendMessage(ChatColor.GREEN+Residence.getLanguage().getPhrase("ResidenceUnrent",ChatColor.YELLOW+landName + ChatColor.GREEN));
-        }
-        else
-        {
-            player.sendMessage(ChatColor.RED+Residence.getLanguage().getPhrase("NoPermission"));
-        }
+    @Override
+    public List<String> getRentedLands(String playername) {
+	return getRentedLands(playername, false);
     }
 
-    private long daysToMs(int days)
-    {
-        return (((long)days) * 24L * 60L * 60L * 1000L);
+    public List<String> getRentedLands(String playername, boolean onlyHidden) {
+	List<String> rentedLands = new ArrayList<String>();
+	for (ClaimedResidence res : rentedLand) {
+	    if (res == null)
+		continue;
+
+	    if (!res.isRented())
+		continue;
+
+	    if (!res.getRentedLand().player.equals(playername))
+		continue;
+
+	    String world = " ";
+	    ClaimedResidence topres = res.getTopParent();
+	    world = topres.getWorld();
+
+	    boolean hidden = topres.getPermissions().has("hidden", false);
+
+	    if (onlyHidden && !hidden)
+		continue;
+
+	    rentedLands.add(Residence.msg(lm.Residence_List, "", res.getName(), world)
+		+ Residence.msg(lm.Rent_Rented));
+	}
+	return rentedLands;
     }
 
-    private int msToDays(long ms)
-    {
-        return (int) Math.ceil(((((double)ms/1000D)/60D)/60D)/24D);
+    public List<ClaimedResidence> getRents(String playername) {
+	return getRents(playername, false);
     }
 
-    public void unrent(Player player, String landName, boolean resadmin)
-    {
-        String[] split = landName.split("\\.");
-        ClaimedResidence res = Residence.getResidenceManager().getByName(landName);
-        if(res == null)
-        {
-            player.sendMessage(ChatColor.YELLOW+Residence.getLanguage().getPhrase("InvalidResidence"));
-            return;
-        }
-        if(!res.getPermissions().hasResidencePermission(player, true) && !resadmin)
-        {
-            player.sendMessage(ChatColor.RED+Residence.getLanguage().getPhrase("NoPermission"));
-            return;
-        }
-        if(rentedLand.containsKey(landName) && !resadmin)
-        {
-            if(split.length!=0)
-                player.sendMessage(ChatColor.RED+Residence.getLanguage().getPhrase("ResidenceAlreadyRented",ChatColor.YELLOW+split[split.length-1] + ChatColor.RED+"."+ChatColor.YELLOW + rentedLand.get(landName).player)+ChatColor.YELLOW);
-            return;
-        }
-        if(rentableLand.containsKey(landName))
-        {
-            ResidenceRentEvent revent = new ResidenceRentEvent(res,player,RentEventType.UNRENT);
-            Residence.getServ().getPluginManager().callEvent(revent);
-            if(revent.isCancelled())
-                return;
-            rentableLand.remove(landName);
-            if(rentedLand.containsKey(landName))
-            {
-                rentedLand.remove(landName);
-                if(res!=null)
-                    res.getPermissions().applyDefaultFlags();
-            }
-            if(split.length!=0)
-                player.sendMessage(ChatColor.RED+Residence.getLanguage().getPhrase("ResidenceRemoveRentable",ChatColor.YELLOW+split[split.length-1] + ChatColor.RED));
+    public List<ClaimedResidence> getRents(String playername, boolean onlyHidden) {
+	List<ClaimedResidence> rentedLands = new ArrayList<ClaimedResidence>();
+	for (ClaimedResidence res : rentedLand) {
+	    if (res == null)
+		continue;
 
-        }
-        else
-        {
-            player.sendMessage(ChatColor.RED+Residence.getLanguage().getPhrase("ResidenceNotForRent"));
-        }
+	    if (!res.isRented())
+		continue;
+
+	    if (!res.getRentedLand().player.equalsIgnoreCase(playername))
+		continue;
+
+	    ClaimedResidence topres = res.getTopParent();
+
+	    boolean hidden = topres.getPermissions().has("hidden", false);
+
+	    if (onlyHidden && !hidden)
+		continue;
+
+	    rentedLands.add(res);
+	}
+	return rentedLands;
     }
 
-    public void removeFromRent(String landName)
-    {
-        rentedLand.remove(landName);
+    public List<String> getRentedLandsList(Player player) {
+	return getRentedLandsList(player.getName());
     }
 
-    public void removeRentable(String landName)
-    {
-        removeFromRent(landName);
-        rentableLand.remove(landName);
+    public List<String> getRentedLandsList(String playername) {
+	List<String> rentedLands = new ArrayList<String>();
+	for (ClaimedResidence res : rentedLand) {
+	    if (res == null)
+		continue;
+	    if (!res.isRented())
+		continue;
+	    if (!res.getRentedLand().player.equalsIgnoreCase(playername))
+		continue;
+	    rentedLands.add(res.getName());
+	}
+	return rentedLands;
     }
 
-    public boolean isForRent(String landName)
-    {
-        return rentableLand.containsKey(landName);
+    @Override
+    public void setForRent(Player player, String landName, int amount, int days, boolean AllowRenewing, boolean resadmin) {
+	setForRent(player, landName, amount, days, AllowRenewing, Residence.getConfigManager().isRentStayInMarket(), resadmin);
     }
 
-    public boolean isRented(String landName)
-    {
-        return rentedLand.containsKey(landName);
+    @Override
+    public void setForRent(Player player, String landName, int amount, int days, boolean AllowRenewing, boolean StayInMarket, boolean resadmin) {
+	setForRent(player, landName, amount, days, AllowRenewing, StayInMarket, Residence.getConfigManager().isRentAllowAutoPay(), resadmin);
     }
 
-    public String getRentingPlayer(String landName)
-    {
-        return rentedLand.containsKey(landName) ? rentedLand.get(landName).player : null;
+    @Override
+    public void setForRent(Player player, String landName, int amount, int days, boolean AllowRenewing, boolean StayInMarket, boolean AllowAutoPay, boolean resadmin) {
+	ClaimedResidence res = Residence.getResidenceManager().getByName(landName);
+	setForRent(player, res, amount, days, AllowRenewing, StayInMarket, AllowAutoPay, resadmin);
     }
 
-    public int getCostOfRent(String landName)
-    {
-        return rentableLand.containsKey(landName) ? rentableLand.get(landName).cost : 0;
+    public void setForRent(Player player, ClaimedResidence res, int amount, int days, boolean AllowRenewing, boolean StayInMarket, boolean AllowAutoPay,
+	boolean resadmin) {
+
+	if (res == null) {
+	    Residence.msg(player, lm.Invalid_Residence);
+	    return;
+	}
+
+	if (!Residence.getConfigManager().enabledRentSystem()) {
+	    Residence.msg(player, lm.Economy_MarketDisabled);
+	    return;
+	}
+
+	if (res.isForSell() && !resadmin) {
+	    Residence.msg(player, lm.Economy_SellRentFail);
+	    return;
+	}
+
+	if (res.isParentForSell() && !resadmin) {
+	    Residence.msg(player, lm.Economy_ParentSellRentFail);
+	    return;
+	}
+
+	if (!resadmin) {
+	    if (!res.getPermissions().hasResidencePermission(player, true)) {
+		Residence.msg(player, lm.General_NoPermission);
+		return;
+	    }
+	    ResidencePlayer rPlayer = Residence.getPlayerManager().getResidencePlayer(player);
+	    PermissionGroup group = rPlayer.getGroup();
+	    if (this.getRentableCount(player.getName()) >= group.getMaxRentables()) {
+		Residence.msg(player, lm.Residence_MaxRent);
+		return;
+	    }
+	}
+
+	if (!rentableLand.contains(res)) {
+	    ResidenceRentEvent revent = new ResidenceRentEvent(res, player, RentEventType.RENTABLE);
+	    Residence.getServ().getPluginManager().callEvent(revent);
+	    if (revent.isCancelled())
+		return;
+	    RentableLand newrent = new RentableLand();
+	    newrent.days = days;
+	    newrent.cost = amount;
+	    newrent.AllowRenewing = AllowRenewing;
+	    newrent.StayInMarket = StayInMarket;
+	    newrent.AllowAutoPay = AllowAutoPay;
+	    res.setRentable(newrent);
+	    rentableLand.add(res);
+	    Residence.msg(player, lm.Residence_ForRentSuccess, res.getResidenceName(), amount, days);
+	} else {
+	    Residence.msg(player, lm.Residence_AlreadyRent);
+	}
     }
 
-    public boolean getRentableRepeatable(String landName)
-    {
-        return rentableLand.containsKey(landName) ? rentableLand.get(landName).repeatable : false;
+    @Override
+    public void rent(Player player, String landName, boolean AutoPay, boolean resadmin) {
+	ClaimedResidence res = Residence.getResidenceManager().getByName(landName);
+	rent(player, res, AutoPay, resadmin);
     }
 
-    public boolean getRentedAutoRepeats(String landName)
-    {
-        return getRentableRepeatable(landName) ? (rentedLand.containsKey(landName) ? rentedLand.get(landName).autoRefresh : false) : false;
+    @SuppressWarnings("deprecation")
+    public void rent(Player player, ClaimedResidence res, boolean AutoPay, boolean resadmin) {
+	if (res == null) {
+	    Residence.msg(player, lm.Invalid_Residence);
+	    return;
+	}
+
+	if (!Residence.getConfigManager().enabledRentSystem()) {
+	    Residence.msg(player, lm.Rent_Disabled);
+	    return;
+	}
+
+	if (res.isOwner(player)) {
+	    Residence.msg(player, lm.Economy_OwnerRentFail);
+	    return;
+	}
+
+	ResidencePlayer rPlayer = Residence.getPlayerManager().getResidencePlayer(player);
+	if (!resadmin && this.getRentCount(player.getName()) >= rPlayer.getMaxRents()) {
+	    Residence.msg(player, lm.Residence_MaxRent);
+	    return;
+	}
+	if (!res.isForRent()) {
+	    Residence.msg(player, lm.Residence_NotForRent);
+	    return;
+	}
+	if (res.isRented()) {
+	    printRentInfo(player, res.getName());
+	    return;
+	}
+
+	RentableLand land = res.getRentable();
+
+	if (Residence.getEconomyManager().canAfford(player.getName(), land.cost)) {
+	    ResidenceRentEvent revent = new ResidenceRentEvent(res, player, RentEventType.RENT);
+	    Residence.getServ().getPluginManager().callEvent(revent);
+	    if (revent.isCancelled())
+		return;
+
+	    if (!land.AllowAutoPay && AutoPay) {
+		Residence.msg(player, lm.Residence_CantAutoPay);
+		AutoPay = false;
+	    }
+
+	    if (Residence.getEconomyManager().transfer(player.getName(), res.getPermissions().getOwner(), land.cost)) {
+		RentedLand newrent = new RentedLand();
+		newrent.player = player.getName();
+		newrent.startTime = System.currentTimeMillis();
+		newrent.endTime = System.currentTimeMillis() + daysToMs(land.days);
+		newrent.AutoPay = AutoPay;
+		res.setRented(newrent);
+		rentedLand.add(res);
+
+		Residence.getSignUtil().CheckSign(res);
+
+		CuboidArea area = res.getAreaArray()[0];
+		Residence.getSelectionManager().NewMakeBorders(player, area.getHighLoc(), area.getLowLoc(), false);
+
+		res.getPermissions().copyUserPermissions(res.getPermissions().getOwner(), player.getName());
+		res.getPermissions().clearPlayersFlags(res.getPermissions().getOwner());
+		res.getPermissions().setPlayerFlag(player.getName(), "admin", FlagState.TRUE);
+		Residence.msg(player, lm.Residence_RentSuccess, res.getName(), land.days);
+
+		if (Residence.getSchematicManager() != null &&
+		    Residence.getConfigManager().RestoreAfterRentEnds &&
+		    !Residence.getConfigManager().SchematicsSaveOnFlagChange &&
+		    res.getPermissions().has("backup", true)) {
+		    Residence.getSchematicManager().save(res);
+		}
+
+	    } else {
+		player.sendMessage(ChatColor.RED + "Error, unable to transfer money...");
+	    }
+	} else {
+	    Residence.msg(player, lm.Economy_NotEnoughMoney);
+	}
     }
 
-    public int getRentDays(String landName)
-    {
-        return rentableLand.containsKey(landName) ? rentableLand.get(landName).days : 0;
+    public void payRent(Player player, String landName, boolean resadmin) {
+	ClaimedResidence res = Residence.getResidenceManager().getByName(landName);
+	payRent(player, res, resadmin);
     }
 
-    public void checkCurrentRents()
-    {
-        Iterator<Entry<String, RentedLand>> it = rentedLand.entrySet().iterator();
-        while(it.hasNext())
-        {
-            Entry<String, RentedLand> next = it.next();
-            RentedLand land = next.getValue();
-            if(land.endTime<=System.currentTimeMillis())
-            {
-                ClaimedResidence res = Residence.getResidenceManager().getByName(next.getKey());
-                if(Residence.getConfigManager().debugEnabled())
-                    System.out.println("Rent Check: "+next.getKey());
-                if (res != null) {
-                    ResidenceRentEvent revent = new ResidenceRentEvent(res, null, RentEventType.RENT_EXPIRE);
-                    Residence.getServ().getPluginManager().callEvent(revent);
-                    if (!revent.isCancelled()) {
-                        RentableLand rentable = rentableLand.get(next.getKey());
-                        if (!rentable.repeatable) {
-                            rentableLand.remove(next.getKey());
-                            it.remove();
-                            res.getPermissions().applyDefaultFlags();
-                        } else if (land.autoRefresh) {
-                            if (!Residence.getEconomyManager().canAfford(land.player, rentable.cost)) {
-                                it.remove();
-                                res.getPermissions().applyDefaultFlags();
-                            } else {
-                                if (!Residence.getEconomyManager().transfer(land.player, res.getPermissions().getOwner(), rentable.cost)) {
-                                    it.remove();
-                                    res.getPermissions().applyDefaultFlags();
-                                }
-                                else
-                                {
-                                    land.endTime = System.currentTimeMillis() + this.daysToMs(rentable.days);
-                                }
-                            }
-                        } else {
-                            res.getPermissions().applyDefaultFlags();
-                            it.remove();
-                        }
-                    }
-                }
-                else
-                {
-                    rentableLand.remove(next.getKey());
-                    it.remove();
-                }
-            }
-        }
+    public void payRent(Player player, ClaimedResidence res, boolean resadmin) {
+	if (res == null) {
+	    Residence.msg(player, lm.Invalid_Residence);
+	    return;
+	}
+	if (!Residence.getConfigManager().enabledRentSystem()) {
+	    Residence.msg(player, lm.Rent_Disabled);
+	    return;
+	}
+
+	if (!res.isForRent()) {
+	    Residence.msg(player, lm.Residence_NotForRent);
+	    return;
+	}
+
+	if (res.isRented() && !getRentingPlayer(res).equals(player.getName()) && !resadmin) {
+	    Residence.msg(player, lm.Rent_NotByYou);
+	    return;
+	}
+
+	RentableLand land = res.getRentable();
+	RentedLand rentedLand = res.getRentedLand();
+
+	if (rentedLand == null) {
+	    Residence.msg(player, lm.Residence_NotRented);
+	    return;
+	}
+
+	if (!land.AllowRenewing) {
+	    Residence.msg(player, lm.Rent_OneTime);
+	    return;
+	}
+
+	ResidencePlayer rPlayer = Residence.getPlayerManager().getResidencePlayer(player);
+	PermissionGroup group = rPlayer.getGroup();
+	if (!resadmin && group.getMaxRentDays() != -1 &&
+	    msToDays((rentedLand.endTime - System.currentTimeMillis()) + daysToMs(land.days)) >= group.getMaxRentDays()) {
+	    Residence.msg(player, lm.Rent_MaxRentDays, group.getMaxRentDays());
+	    return;
+	}
+
+	if (Residence.getEconomyManager().canAfford(player.getName(), land.cost)) {
+	    ResidenceRentEvent revent = new ResidenceRentEvent(res, player, RentEventType.RENT);
+	    Residence.getServ().getPluginManager().callEvent(revent);
+	    if (revent.isCancelled())
+		return;
+	    if (Residence.getEconomyManager().transfer(player.getName(), res.getPermissions().getOwner(), land.cost)) {
+		rentedLand.endTime = rentedLand.endTime + daysToMs(land.days);
+		Residence.getSignUtil().CheckSign(res);
+		CuboidArea area = res.getAreaArray()[0];
+		Residence.getSelectionManager().NewMakeBorders(player, area.getHighLoc(), area.getLowLoc(), false);
+		Residence.msg(player, lm.Rent_Extended, land.days, res.getName());
+		Residence.msg(player, lm.Rent_Expire, GetTime.getTime(rentedLand.endTime));
+	    } else {
+		player.sendMessage(ChatColor.RED + "Error, unable to transfer money...");
+	    }
+	} else {
+	    Residence.msg(player, lm.Economy_NotEnoughMoney);
+	}
     }
 
-    public void setRentRepeatable(Player player, String landName, boolean value, boolean resadmin)
-    {
-        String[] split = landName.split("\\.");
-        RentableLand land = rentableLand.get(landName);
-        ClaimedResidence res = Residence.getResidenceManager().getByName(landName);
-        if(land!=null && res!=null && (res.getPermissions().getOwner().equalsIgnoreCase(player.getName()) || resadmin))
-        {
-            land.repeatable = value;
-            if(!value && this.isRented(landName))
-                rentedLand.get(landName).autoRefresh = false;
-            if(value && split.length!=0)
-                player.sendMessage(ChatColor.RED+Residence.getLanguage().getPhrase("RentableEnableRenew",ChatColor.YELLOW+split[split.length-1] + ChatColor.RED));
-            else if(split.length!=0)
-                player.sendMessage(ChatColor.RED+Residence.getLanguage().getPhrase("RentableDisableRenew",ChatColor.YELLOW+split[split.length-1] + ChatColor.RED));
-        }
+    @Override
+    public void unrent(Player player, String landName, boolean resadmin) {
+	ClaimedResidence res = Residence.getResidenceManager().getByName(landName);
+	unrent(player, res, resadmin);
     }
 
-    public void setRentedRepeatable(Player player, String landName, boolean value, boolean resadmin)
-    {
-        String[] split = landName.split("\\.");
-        RentedLand land = rentedLand.get(landName);
-        if(land!=null && (land.player.equals(player.getName()) || resadmin))
-        {
-            land.autoRefresh = value;
-            if(value && split.length!=0)
-                player.sendMessage(ChatColor.RED+Residence.getLanguage().getPhrase("RentEnableRenew",ChatColor.YELLOW+split[split.length-1] + ChatColor.RED));
-            else if(split.length!=0)
-                player.sendMessage(ChatColor.RED+Residence.getLanguage().getPhrase("RentDisableRenew",ChatColor.YELLOW+split[split.length-1] + ChatColor.RED));
-        }
+    public void unrent(Player player, ClaimedResidence res, boolean resadmin) {
+	if (res == null) {
+	    Residence.msg(player, lm.Invalid_Residence);
+	    return;
+	}
+
+	RentedLand rent = res.getRentedLand();
+	if (rent == null) {
+	    Residence.msg(player, lm.Residence_NotRented);
+	    return;
+	}
+
+	if (resadmin || rent.player.equals(player.getName())) {
+	    ResidenceRentEvent revent = new ResidenceRentEvent(res, player, RentEventType.UNRENTABLE);
+	    Residence.getServ().getPluginManager().callEvent(revent);
+	    if (revent.isCancelled())
+		return;
+
+	    rentedLand.remove(res);
+	    res.setRented(null);
+	    if (!res.getRentable().AllowRenewing && !res.getRentable().StayInMarket) {
+		rentableLand.remove(res);
+		res.setRentable(null);
+	    }
+
+	    boolean backup = res.getPermissions().has("backup", false);
+
+	    if (Residence.getConfigManager().isRemoveLwcOnUnrent())
+		Residence.getResidenceManager().removeLwcFromResidence(player, res);
+
+	    res.getPermissions().applyDefaultFlags();
+
+	    if (Residence.getSchematicManager() != null && Residence.getConfigManager().RestoreAfterRentEnds && backup) {
+		Residence.getSchematicManager().load(res);
+		// set true if its already exists
+		res.getPermissions().setFlag("backup", FlagState.TRUE);
+	    }
+	    Residence.getSignUtil().CheckSign(res);
+
+	    Residence.msg(player, lm.Residence_Unrent, res.getName());
+	} else {
+	    Residence.msg(player, lm.General_NoPermission);
+	}
     }
 
-    public void printRentInfo(Player player, String landName)
-    {
-        RentableLand rentable = rentableLand.get(landName);
-        RentedLand rented = rentedLand.get(landName);
-        if(rentable!=null)
-        {
-            player.sendMessage(ChatColor.GOLD+Residence.getLanguage().getPhrase("Land")+":"+ChatColor.DARK_GREEN + landName);
-            player.sendMessage(ChatColor.YELLOW+Residence.getLanguage().getPhrase("Cost")+": "+ChatColor.DARK_AQUA + rentable.cost + " per " + rentable.days + " days");
-            player.sendMessage(ChatColor.GREEN+Residence.getLanguage().getPhrase("RentableAutoRenew")+":"+ChatColor.DARK_AQUA + rentable.repeatable);
-            if(rented!=null)
-            {
-                player.sendMessage(ChatColor.GOLD+Residence.getLanguage().getPhrase("Status")+":"+ChatColor.YELLOW+" "+Residence.getLanguage().getPhrase("ResidenceRentedBy",ChatColor.RED + rented.player+ChatColor.YELLOW));
-                player.sendMessage(ChatColor.YELLOW+Residence.getLanguage().getPhrase("RentExpire")+":"+ChatColor.GREEN + new Date(rented.endTime));
-                player.sendMessage(ChatColor.GREEN+Residence.getLanguage().getPhrase("RentAutoRenew")+":"+ChatColor.DARK_AQUA + rented.autoRefresh);
-            }
-            else
-            {
-                player.sendMessage(ChatColor.GOLD+Residence.getLanguage().getPhrase("Status")+":"+ChatColor.GREEN+" "+Residence.getLanguage().getPhrase("Available"));
-            }
-        }
-        else
-        {
-            player.sendMessage(ChatColor.RED+Residence.getLanguage().getPhrase("ResidenceNotForRent"));
-        }
+    private static long daysToMs(int days) {
+//	return (((long) days) * 1000L);
+	return ((days) * 24L * 60L * 60L * 1000L);
     }
 
-    public static RentManager load(Map<String,Object> root)
-    {
-        RentManager rentManager = new RentManager();
-        if(root!=null)
-        {
-            Map<String,Object> rentables = (Map<String, Object>) root.get("Rentables");
-            for(Entry<String, Object> rent : rentables.entrySet())
-            {
-                rentManager.rentableLand.put(rent.getKey(), RentableLand.load((Map<String, Object>) rent.getValue()));
-            }
-            Map<String,Object> rented = (Map<String, Object>) root.get("Rented");
-            for(Entry<String, Object> rent : rented.entrySet())
-            {
-                rentManager.rentedLand.put(rent.getKey(), RentedLand.load((Map<String, Object>) rent.getValue()));
-            }
-        }
-        return rentManager;
+    private static int msToDays(long ms) {
+	return (int) Math.ceil((((ms / 1000D) / 60D) / 60D) / 24D);
     }
 
-    public Map<String,Object> save()
-    {
-        Map<String,Object> root = new HashMap<String,Object>();
-        Map<String,Object> rentables = new HashMap<String,Object>();
-        for(Entry<String, RentableLand> rent : rentableLand.entrySet())
-        {
-            rentables.put(rent.getKey(), rent.getValue().save());
-        }
-        Map<String,Object> rented = new HashMap<String,Object>();
-        for(Entry<String, RentedLand> rent : rentedLand.entrySet())
-        {
-            rented.put(rent.getKey(), rent.getValue().save());
-        }
-        root.put("Rentables", rentables);
-        root.put("Rented", rented);
-        return root;
+    @Override
+    public void removeFromForRent(Player player, String landName, boolean resadmin) {
+	ClaimedResidence res = Residence.getResidenceManager().getByName(landName);
+	removeFromForRent(player, res, resadmin);
     }
 
-    public void updateRentableName(String oldName, String newName)
-    {
-        if(rentableLand.containsKey(oldName))
-        {
-            rentableLand.put(newName, rentableLand.get(oldName));
-            rentableLand.remove(oldName);
-        }
-        if(rentedLand.containsKey(oldName))
-        {
-            rentedLand.put(newName, rentedLand.get(oldName));
-            rentedLand.remove(oldName);
-        }
+    public void removeFromForRent(Player player, ClaimedResidence res, boolean resadmin) {
+	if (res == null) {
+	    Residence.msg(player, lm.Invalid_Residence);
+	    return;
+	}
+
+	if (!res.getPermissions().hasResidencePermission(player, true) && !resadmin) {
+	    Residence.msg(player, lm.General_NoPermission);
+	    return;
+	}
+
+	if (rentableLand.contains(res)) {
+	    ResidenceRentEvent revent = new ResidenceRentEvent(res, player, RentEventType.UNRENT);
+	    Residence.getServ().getPluginManager().callEvent(revent);
+	    if (revent.isCancelled())
+		return;
+	    rentableLand.remove(res);
+	    res.setRentable(null);
+	    res.getPermissions().applyDefaultFlags();
+	    Residence.getSignUtil().CheckSign(res);
+	    Residence.msg(player, lm.Residence_RemoveRentable, res.getResidenceName());
+	} else {
+	    Residence.msg(player, lm.Residence_NotForRent);
+	}
     }
 
-    public void printRentableResidences(Player player)
-    {
-        Set<Entry<String, RentableLand>> set = rentableLand.entrySet();
-        player.sendMessage(ChatColor.YELLOW+Residence.getLanguage().getPhrase("RentableLand")+":");
-        StringBuilder sbuild = new StringBuilder();
-        sbuild.append(ChatColor.GREEN);
-        boolean firstadd = true;
-        for(Entry<String, RentableLand> land : set)
-        {
-            if(!this.isRented(land.getKey()))
-            {
-                if(!firstadd)
-                    sbuild.append(", ");
-                else
-                    firstadd = false;
-                sbuild.append(land.getKey());
-            }
-        }
-        player.sendMessage(sbuild.toString());
+    @Override
+    public void removeFromRent(String landName) {
+	ClaimedResidence res = Residence.getResidenceManager().getByName(landName);
+	removeFromRent(res);
     }
 
-    public int getRentCount(String player)
-    {
-        Set<Entry<String, RentedLand>> set = rentedLand.entrySet();
-        int count = 0;
-        for(Entry<String, RentedLand> land : set)
-        {
-            if(land.getValue().player.equalsIgnoreCase(player))
-                count++;
-        }
-        return count;
+    public void removeFromRent(ClaimedResidence res) {
+	rentedLand.remove(res);
     }
 
-    public int getRentableCount(String player)
-    {
-        Set<String> set = rentableLand.keySet();
-        int count = 0;
-        for(String land : set)
-        {
-            ClaimedResidence res = Residence.getResidenceManager().getByName(land);
-            if(res!=null)
-                if(res.getPermissions().getOwner().equalsIgnoreCase(player))
-                    count++;
-        }
-        return count;
+    @Override
+    public void removeRentable(String landName) {
+	ClaimedResidence res = Residence.getResidenceManager().getByName(landName);
+	removeRentable(res);
     }
+
+    public void removeRentable(ClaimedResidence res) {
+	if (res == null)
+	    return;
+	removeFromRent(res);
+	rentableLand.remove(res);
+	Residence.getSignUtil().removeSign(res.getName());
+    }
+
+    @Override
+    public boolean isForRent(String landName) {
+	ClaimedResidence res = Residence.getResidenceManager().getByName(landName);
+	return isForRent(res);
+    }
+
+    public boolean isForRent(ClaimedResidence res) {
+	if (res == null)
+	    return false;
+	return rentableLand.contains(res);
+    }
+
+    public RentableLand getRentableLand(String landName) {
+	ClaimedResidence res = Residence.getResidenceManager().getByName(landName);
+	return getRentableLand(res);
+    }
+
+    public RentableLand getRentableLand(ClaimedResidence res) {
+	if (res == null)
+	    return null;
+	if (res.isForRent())
+	    return res.getRentable();
+	return null;
+    }
+
+    @Override
+    public boolean isRented(String landName) {
+	ClaimedResidence res = Residence.getResidenceManager().getByName(landName);
+	return isRented(res);
+    }
+
+    public boolean isRented(ClaimedResidence res) {
+	if (res == null)
+	    return false;
+	return rentedLand.contains(res);
+    }
+
+    @Override
+    public String getRentingPlayer(String landName) {
+	ClaimedResidence res = Residence.getResidenceManager().getByName(landName);
+	return getRentingPlayer(res);
+    }
+
+    public String getRentingPlayer(ClaimedResidence res) {
+	if (res == null)
+	    return null;
+	return res.isRented() ? res.getRentedLand().player : null;
+    }
+
+    @Override
+    public int getCostOfRent(String landName) {
+	ClaimedResidence res = Residence.getResidenceManager().getByName(landName);
+	return getCostOfRent(res);
+    }
+
+    public int getCostOfRent(ClaimedResidence res) {
+	if (res == null)
+	    return 0;
+	return res.isForRent() ? res.getRentable().cost : 0;
+    }
+
+    @Override
+    public boolean getRentableRepeatable(String landName) {
+	ClaimedResidence res = Residence.getResidenceManager().getByName(landName);
+	return getRentableRepeatable(res);
+    }
+
+    public boolean getRentableRepeatable(ClaimedResidence res) {
+	if (res == null)
+	    return false;
+	return res.isForRent() ? res.getRentable().AllowRenewing : false;
+    }
+
+    @Override
+    public boolean getRentedAutoRepeats(String landName) {
+	ClaimedResidence res = Residence.getResidenceManager().getByName(landName);
+	return getRentedAutoRepeats(res);
+    }
+
+    public boolean getRentedAutoRepeats(ClaimedResidence res) {
+	if (res == null)
+	    return false;
+	return getRentableRepeatable(res) ? (rentedLand.contains(res) ? res.getRentedLand().AutoPay : false) : false;
+    }
+
+    @Override
+    public int getRentDays(String landName) {
+	ClaimedResidence res = Residence.getResidenceManager().getByName(landName);
+	return getRentDays(res);
+    }
+
+    public int getRentDays(ClaimedResidence res) {
+	if (res == null)
+	    return 0;
+	return res.isForRent() ? res.getRentable().days : 0;
+    }
+
+    @Override
+    public void checkCurrentRents() {
+	Set<ClaimedResidence> t = new HashSet<ClaimedResidence>();
+	t.addAll(rentedLand);
+	for (ClaimedResidence res : t) {
+
+	    if (res == null)
+		continue;
+
+	    RentedLand land = res.getRentedLand();
+	    if (land == null)
+		continue;
+
+	    if (land.endTime > System.currentTimeMillis())
+		continue;
+
+	    if (Residence.getConfigManager().debugEnabled())
+		System.out.println("Rent Check: " + res.getName());
+
+	    ResidenceRentEvent revent = new ResidenceRentEvent(res, null, RentEventType.RENT_EXPIRE);
+	    Residence.getServ().getPluginManager().callEvent(revent);
+	    if (revent.isCancelled())
+		continue;
+
+	    RentableLand rentable = res.getRentable();
+	    if (!rentable.AllowRenewing) {
+		if (!rentable.StayInMarket) {
+		    rentableLand.remove(res);
+		    res.setRentable(null);
+		}
+		rentedLand.remove(res);
+		res.setRented(null);
+		res.getPermissions().applyDefaultFlags();
+		Residence.getSignUtil().CheckSign(res);
+		continue;
+	    }
+	    if (land.AutoPay && rentable.AllowAutoPay) {
+		if (!Residence.getEconomyManager().canAfford(land.player, rentable.cost)) {
+		    if (!rentable.StayInMarket) {
+			rentableLand.remove(res);
+			res.setRentable(null);
+		    }
+		    rentedLand.remove(res);
+		    res.setRented(null);
+		    res.getPermissions().applyDefaultFlags();
+		} else {
+		    if (!Residence.getEconomyManager().transfer(land.player, res.getPermissions().getOwner(), rentable.cost)) {
+			if (!rentable.StayInMarket) {
+			    rentableLand.remove(res);
+			    res.setRentable(null);
+			}
+			rentedLand.remove(res);
+			res.setRented(null);
+			res.getPermissions().applyDefaultFlags();
+		    } else {
+			land.endTime = System.currentTimeMillis() + daysToMs(rentable.days);
+		    }
+		}
+
+		Residence.getSignUtil().CheckSign(res);
+		continue;
+	    }
+	    if (!rentable.StayInMarket) {
+		rentableLand.remove(res);
+		res.setRentable(null);
+	    }
+	    rentedLand.remove(res);
+	    res.setRented(null);
+
+	    boolean backup = res.getPermissions().has("backup", false);
+
+	    res.getPermissions().applyDefaultFlags();
+
+	    if (Residence.getSchematicManager() != null && Residence.getConfigManager().RestoreAfterRentEnds && backup) {
+		Residence.getSchematicManager().load(res);
+		Residence.getSignUtil().CheckSign(res);
+		// set true if its already exists
+		res.getPermissions().setFlag("backup", FlagState.TRUE);
+		// To avoid lag spikes on multiple residence restores at once, will limit to one residence at time
+		break;
+	    }
+	    Residence.getSignUtil().CheckSign(res);
+	}
+    }
+
+    @Override
+    public void setRentRepeatable(Player player, String landName, boolean value, boolean resadmin) {
+	ClaimedResidence res = Residence.getResidenceManager().getByName(landName);
+	setRentRepeatable(player, res, value, resadmin);
+    }
+
+    public void setRentRepeatable(Player player, ClaimedResidence res, boolean value, boolean resadmin) {
+
+	if (res == null) {
+	    Residence.msg(player, lm.Invalid_Residence);
+	    return;
+	}
+
+	RentableLand land = res.getRentable();
+
+	if (!res.isOwner(player) && !resadmin) {
+	    Residence.msg(player, lm.Residence_NotOwner);
+	    return;
+	}
+
+	if (land == null || res == null || !res.isOwner(player) && !resadmin) {
+	    Residence.msg(player, lm.Residence_NotOwner);
+	    return;
+	}
+
+	land.AllowRenewing = value;
+	if (!value && this.isRented(res))
+	    res.getRentedLand().AutoPay = false;
+
+	if (value)
+	    Residence.msg(player, lm.Rentable_EnableRenew, res.getResidenceName());
+	else
+	    Residence.msg(player, lm.Rentable_DisableRenew, res.getResidenceName());
+
+    }
+
+    @Override
+    public void setRentedRepeatable(Player player, String landName, boolean value, boolean resadmin) {
+	ClaimedResidence res = Residence.getResidenceManager().getByName(landName);
+	setRentedRepeatable(player, res, value, resadmin);
+    }
+
+    public void setRentedRepeatable(Player player, ClaimedResidence res, boolean value, boolean resadmin) {
+	if (res == null) {
+	    Residence.msg(player, lm.Invalid_Residence);
+	    return;
+	}
+
+	RentedLand land = res.getRentedLand();
+
+	if (land == null) {
+	    Residence.msg(player, lm.Invalid_Residence);
+	    return;
+	}
+
+	if (!res.getRentable().AllowAutoPay && value) {
+	    Residence.msg(player, lm.Residence_CantAutoPay);
+	    return;
+	}
+
+	if (!land.player.equals(player.getName()) && !resadmin) {
+	    Residence.msg(player, lm.Residence_NotOwner);
+	    return;
+	}
+
+	if (!land.player.equals(player.getName()) && !resadmin) {
+	    Residence.msg(player, lm.Residence_NotOwner);
+	    return;
+	}
+
+	land.AutoPay = value;
+	if (value)
+	    Residence.msg(player, lm.Rent_EnableRenew, res.getResidenceName());
+	else
+	    Residence.msg(player, lm.Rent_DisableRenew, res.getResidenceName());
+
+	if (res != null)
+	    Residence.getSignUtil().CheckSign(res);
+    }
+
+    public void printRentInfo(Player player, String landName) {
+	ClaimedResidence res = Residence.getResidenceManager().getByName(landName);
+	printRentInfo(player, res);
+    }
+
+    public void printRentInfo(Player player, ClaimedResidence res) {
+
+	if (res == null) {
+	    Residence.msg(player, lm.Invalid_Residence);
+	    return;
+	}
+
+	RentableLand rentable = res.getRentable();
+	RentedLand rented = res.getRentedLand();
+	if (rentable != null) {
+	    Residence.msg(player, lm.General_Separator);
+	    Residence.msg(player, lm.General_Land, res.getName());
+	    Residence.msg(player, lm.General_Cost, rentable.cost, rentable.days);
+	    Residence.msg(player, lm.Rentable_AllowRenewing, rentable.AllowRenewing);
+	    Residence.msg(player, lm.Rentable_StayInMarket, rentable.StayInMarket);
+	    Residence.msg(player, lm.Rentable_AllowAutoPay, rentable.AllowAutoPay);
+	    if (rented != null) {
+		Residence.msg(player, lm.Residence_RentedBy, rented.player);
+
+		if (rented.player.equals(player.getName()) || res != null && res.isOwner(player) || Residence.isResAdminOn(player))
+		    player.sendMessage((rented.AutoPay ? Residence.msg(lm.Rent_AutoPayTurnedOn) : Residence.msg(lm.Rent_AutoPayTurnedOff))
+			+ "\n");
+		Residence.msg(player, lm.Rent_Expire, GetTime.getTime(rented.endTime));
+	    } else {
+		Residence.msg(player, lm.General_Status, Residence.msg(lm.General_Available));
+	    }
+	    Residence.msg(player, lm.General_Separator);
+	} else {
+	    Residence.msg(player, lm.General_Separator);
+	    Residence.msg(player, lm.Residence_NotForRent);
+	    Residence.msg(player, lm.General_Separator);
+	}
+    }
+
+    public void printRentableResidences(Player player, int page) {
+	Residence.msg(player, lm.Rentable_Land);
+	StringBuilder sbuild = new StringBuilder();
+	sbuild.append(ChatColor.GREEN);
+
+	int perpage = 10;
+
+	int pagecount = (int) Math.ceil((double) rentableLand.size() / (double) perpage);
+
+	if (page < 1)
+	    page = 1;
+
+	int z = 0;
+
+	for (ClaimedResidence res : rentableLand) {
+	    if (res == null)
+		continue;
+
+	    z++;
+	    if (z <= (page - 1) * perpage)
+		continue;
+	    if (z > (page - 1) * perpage + perpage)
+		break;
+
+	    boolean rented = res.isRented();
+
+	    if (!res.getRentable().AllowRenewing && rented)
+		continue;
+
+	    String rentedBy = "";
+	    String hover = "";
+	    if (rented) {
+		RentedLand rent = res.getRentedLand();
+		rentedBy = Residence.msg(lm.Residence_RentedBy, rent.player);
+		hover = GetTime.getTime(rent.endTime);
+	    }
+
+	    String msg = Residence.msg(lm.Rent_RentList, z, res.getName(), res.getRentable().cost, res.getRentable().days, res.getRentable().AllowRenewing,
+		res.getOwner(), rentedBy);
+
+	    if (!hover.equalsIgnoreCase(""))
+		Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "tellraw " + player.getName() + " {\"text\":\"\",\"extra\":[{\"text\":\"" + msg
+		    + "\",\"hoverEvent\":{\"action\":\"show_text\",\"value\":\"§2" + hover + "\"}}]}");
+	    else
+		player.sendMessage(msg);
+
+	}
+
+	String separator = ChatColor.GOLD + "";
+	String simbol = "\u25AC";
+	for (int i = 0; i < 10; i++) {
+	    separator += simbol;
+	}
+
+	if (pagecount == 1)
+	    return;
+
+	int NextPage = page + 1;
+	NextPage = page < pagecount ? NextPage : page;
+	int Prevpage = page - 1;
+	Prevpage = page > 1 ? Prevpage : page;
+
+	String prevCmd = "/res market list rent " + Prevpage;
+	String prev = "[\"\",{\"text\":\"" + separator + " " + Residence.msg(lm.General_PrevInfoPage)
+	    + "\",\"clickEvent\":{\"action\":\"run_command\",\"value\":\"" + prevCmd
+	    + "\"},\"hoverEvent\":{\"action\":\"show_text\",\"value\":{\"text\":\"\",\"extra\":[{\"text\":\"" + "<<<" + "\"}]}}}";
+	String nextCmd = "/res market list rent " + NextPage;
+	String next = " {\"text\":\"" + Residence.msg(lm.General_NextInfoPage) + " " + separator
+	    + "\",\"clickEvent\":{\"action\":\"run_command\",\"value\":\""
+	    + nextCmd + "\"},\"hoverEvent\":{\"action\":\"show_text\",\"value\":{\"text\":\"\",\"extra\":[{\"text\":\"" + ">>>" + "\"}]}}}]";
+
+	Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "tellraw " + player.getName() + " " + prev + "," + next);
+    }
+
+    @Override
+    public int getRentCount(String player) {
+	int count = 0;
+	for (ClaimedResidence res : rentedLand) {
+	    if (res.getRentedLand().player.equalsIgnoreCase(player))
+		count++;
+	}
+	return count;
+    }
+
+    @Override
+    public int getRentableCount(String player) {
+	int count = 0;
+	for (ClaimedResidence res : rentableLand) {
+	    if (res != null)
+		if (res.isOwner(player))
+		    count++;
+	}
+	return count;
+    }
+
+    @Override
+    public Set<ClaimedResidence> getRentableResidences() {
+	return rentableLand;
+    }
+
+    @Override
+    public Set<ClaimedResidence> getCurrentlyRentedResidences() {
+	return rentedLand;
+    }
+
+    @SuppressWarnings("unchecked")
+    public void load(Map<String, Object> root) {
+	if (root == null)
+	    return;
+	this.rentableLand.clear();
+
+	Map<String, Object> rentables = (Map<String, Object>) root.get("Rentables");
+	for (Entry<String, Object> rent : rentables.entrySet()) {
+	    RentableLand one = loadRentable((Map<String, Object>) rent.getValue());
+	    ClaimedResidence res = Residence.getResidenceManager().getByName(rent.getKey());
+	    if (res != null) {
+		res.setRentable(one);
+		this.rentableLand.add(res);
+	    }
+	}
+	Map<String, Object> rented = (Map<String, Object>) root.get("Rented");
+	for (Entry<String, Object> rent : rented.entrySet()) {
+	    RentedLand one = loadRented((Map<String, Object>) rent.getValue());
+	    ClaimedResidence res = Residence.getResidenceManager().getByName(rent.getKey());
+	    if (res != null) {
+		res.setRented(one);
+		this.rentedLand.add(res);
+	    }
+	}
+    }
+
+    public Map<String, Object> save() {
+	Map<String, Object> root = new HashMap<String, Object>();
+	Map<String, Object> rentables = new HashMap<String, Object>();
+	for (ClaimedResidence res : rentableLand) {
+	    if (res == null || res.getRentable() == null)
+		continue;
+	    rentables.put(res.getName(), res.getRentable().save());
+	}
+	Map<String, Object> rented = new HashMap<String, Object>();
+	for (ClaimedResidence res : rentedLand) {
+	    if (res == null || res.getRentedLand() == null)
+		continue;
+	    rented.put(res.getName(), res.getRentedLand().save());
+	}
+	root.put("Rentables", rentables);
+	root.put("Rented", rented);
+	return root;
+    }
+
+    private static RentableLand loadRentable(Map<String, Object> map) {
+	RentableLand newland = new RentableLand();
+	newland.cost = (Integer) map.get("Cost");
+	newland.days = (Integer) map.get("Days");
+	newland.AllowRenewing = (Boolean) map.get("Repeatable");
+	if (map.containsKey("StayInMarket"))
+	    newland.StayInMarket = (Boolean) map.get("StayInMarket");
+	if (map.containsKey("AllowAutoPay"))
+	    newland.AllowAutoPay = (Boolean) map.get("AllowAutoPay");
+	return newland;
+    }
+
+    private static RentedLand loadRented(Map<String, Object> map) {
+	RentedLand newland = new RentedLand();
+	newland.player = (String) map.get("Player");
+	newland.startTime = (Long) map.get("StartTime");
+	newland.endTime = (Long) map.get("EndTime");
+	newland.AutoPay = (Boolean) map.get("AutoRefresh");
+	return newland;
+    }
+
 }

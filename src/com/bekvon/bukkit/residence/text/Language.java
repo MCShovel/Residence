@@ -1,82 +1,181 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package com.bekvon.bukkit.residence.text;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Set;
+
+import org.bukkit.ChatColor;
 import org.bukkit.configuration.file.FileConfiguration;
+import com.bekvon.bukkit.residence.Residence;
+import com.bekvon.bukkit.residence.containers.Flags;
+import com.bekvon.bukkit.residence.containers.lm;
+import com.bekvon.bukkit.residence.utils.YmlMaker;
 
-/**
- * 
- * @author Administrator
- */
 public class Language {
-    public Map<String, String> text;
+    public FileConfiguration enlocale;
+    public FileConfiguration customlocale;
+    private Residence plugin;
 
-    public Language() {
-        text = new HashMap<String, String>();
+    public Language(Residence plugin) {
+	this.plugin = plugin;
     }
 
-    public void setText(String key, String intext) {
-        text.put(key, intext);
+    /**
+     * Reloads the config
+     */
+    public void LanguageReload() {
+	customlocale = new YmlMaker(plugin, "Language/" + Residence.getConfigManager().getLanguage() + ".yml").getConfig();
+	enlocale = new YmlMaker(plugin, "Language/English.yml").getConfig();
+	if (customlocale == null)
+	    customlocale = enlocale;
     }
 
-    private String getText(String key) {
-        String t = text.get(key);
-        if (t == null) {
-            t = "<missing language key: " + key + ">";
-        }
-        return t;
+    /**
+     * Get the message with the correct key
+     * 
+     * @param key
+     *            - the key of the message
+     * @return the message
+     */
+//    public String getMessage2(String key) {
+//	return getMessage(key, "");
+//    }
+
+    /**
+     * Get the message with the correct key
+     * 
+     * @param key
+     *            - the path of the message
+     * @param variables
+     *            - the variables separated with %
+     * @return the message
+     */
+
+    public String getMessage(String key) {
+	if (!key.contains("Language.") && !key.contains("CommandHelp."))
+	    key = "Language." + key;
+	String missing = "Missing locale for " + key;
+	String message = "";
+	if (customlocale == null || !customlocale.contains(key))
+	    message = enlocale.contains(key) == true ? enlocale.getString(key) : missing;
+	message = customlocale.contains(key) == true ? customlocale.getString(key) : missing;
+	return ChatColor.translateAlternateColorCodes('&', message);
     }
 
-    public String getPhrase(String key) {
-        String[] split = key.split("\\.");
-        return getPhrase(split);
+    /**
+     * Get the message with the correct key
+     * 
+     * @param key
+     *            - the path of the message
+     * @param variables
+     *            - the variables separated with %
+     * @return the message
+     */
+
+    public String getMessage(lm lm, Object... variables) {
+	String key = lm.getPath();
+	if (!key.contains("Language.") && !key.contains("CommandHelp."))
+	    key = "Language." + key;
+	String missing = "Missing locale for " + key;
+	String message = "";
+	if (customlocale == null || !customlocale.contains(key))
+	    message = enlocale.contains(key) == true ? enlocale.getString(key) : missing;
+	message = customlocale.contains(key) == true ? customlocale.getString(key) : missing;
+
+	for (int i = 1; i <= variables.length; i++) {
+	    String vr = String.valueOf(variables[i - 1]);
+	    if (variables[i - 1] instanceof Flags)
+		vr = ((Flags) variables[i - 1]).getName();
+	    message = message.replace("%" + i, vr);
+	}
+	return ChatColor.translateAlternateColorCodes('&', message);
     }
 
-    public String getPhrase(String[] keys) {
-        return this.getPhrase(keys, (String[]) null);
+    /**
+     * Get the message with the correct key
+     * 
+     * @param key
+     *            - the key of the message
+     * @return the message
+     */
+    public String getDefaultMessage(String key) {
+	if (!key.contains("Language.") && !key.contains("CommandHelp."))
+	    key = "Language." + key;
+	String missing = "Missing locale for " + key;
+	return enlocale.contains(key) == true ? ChatColor.translateAlternateColorCodes('&', enlocale.getString(key)) : missing;
     }
 
-    public String getPhrase(String key, String words) {
-        return this.getPhrase(key.split("\\."), words);
+    /**
+     * Get the message with the correct key
+     * 
+     * @param key
+     *            - the key of the message
+     * @return the message
+     */
+    public List<String> getMessageList2(String key) {
+	if (!key.contains("Language.") && !key.contains("CommandHelp."))
+	    key = "Language." + key;
+	String missing = "Missing locale for " + key;
+	if (customlocale.isList(key))
+	    return ColorsArray(customlocale.getStringList(key));
+	return enlocale.getStringList(key).size() > 0 ? ColorsArray(enlocale.getStringList(key)) : Arrays.asList(missing);
     }
 
-    public String getPhrase(String[] keys, String words) {
-        if (words == null) {
-            return this.getPhrase(keys, (String[]) null);
-        } else {
-            return this.getPhrase(keys, words.split("\\."));
-        }
+    /**
+     * Get the message with the correct key
+     * 
+     * @param key
+     *            - the key of the message
+     * @return the message
+     */
+    public List<String> getMessageList(lm lm) {
+	String key = lm.getPath();
+	if (!key.contains("Language.") && !key.contains("CommandHelp."))
+	    key = "Language." + key;
+	String missing = "Missing locale for " + key;
+	if (customlocale.isList(key))
+	    return ColorsArray(customlocale.getStringList(key));
+	return enlocale.getStringList(key).size() > 0 ? ColorsArray(enlocale.getStringList(key)) : Arrays.asList(missing);
     }
 
-    public String getPhrase(String[] keys, String[] words) {
-        String sentence = "";
-        for (String key : keys) {
-            if (sentence.length() == 0) {
-                sentence = this.getText(key);
-            } else {
-                sentence = sentence + " " + this.getText(key).toLowerCase();
-            }
-        }
-        if (words != null) {
-            for (int i = 0; i < words.length; i++) {
-                sentence = sentence.replaceAll("%" + (i + 1), words[i]);
-            }
-        }
-        return sentence;
+    /**
+     * Get the message with the correct key
+     * 
+     * @param key
+     *            - the key of the message
+     * @return the message
+     */
+    public Set<String> getKeyList(String key) {
+	if (customlocale.isConfigurationSection(key))
+	    return customlocale.getConfigurationSection(key).getKeys(false);
+	return enlocale.getConfigurationSection(key).getKeys(false);
     }
 
-    public static Language parseText(FileConfiguration node, String topkey) {
-        Language newholder = new Language();
-        Set<String> keys = node.getConfigurationSection(topkey).getKeys(false);
-        for (String key : keys) {
-            newholder.text.put(key, node.getString(topkey + "." + key));
-        }
-        return newholder;
+    /**
+     * Check if key exists
+     * 
+     * @param key
+     *            - the key of the message
+     * @return true/false
+     */
+    public boolean containsKey(String key) {
+	if (!key.contains("Language.") && !key.contains("CommandHelp."))
+	    key = "Language." + key;
+	if (customlocale == null || !customlocale.contains(key))
+	    return enlocale.contains(key);
+	return customlocale.contains(key);
+    }
+
+    private static List<String> ColorsArray(List<String> text) {
+	List<String> temp = new ArrayList<String>();
+	for (String part : text) {
+	    temp.add(Colors(part));
+	}
+	return temp;
+    }
+
+    private static String Colors(String text) {
+	return ChatColor.translateAlternateColorCodes('&', text);
     }
 }

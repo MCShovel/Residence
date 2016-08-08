@@ -1,20 +1,12 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package com.bekvon.bukkit.residence.event;
 
 import com.bekvon.bukkit.residence.protection.ClaimedResidence;
 import org.bukkit.event.HandlerList;
 
-/**
- *
- * @author Administrator
- */
 public class ResidenceFlagCheckEvent extends ResidenceFlagEvent {
 private static final HandlerList handlers = new HandlerList();
 
+    @Override
     public HandlerList getHandlers() {
         return handlers;
     }
