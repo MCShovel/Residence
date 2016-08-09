@@ -25,6 +25,7 @@ import org.bukkit.entity.Player;
 import com.bekvon.bukkit.residence.Residence;
 import com.bekvon.bukkit.residence.api.ResidenceInterface;
 import com.bekvon.bukkit.residence.containers.ResidencePlayer;
+import com.bekvon.bukkit.residence.containers.Visualizer;
 import com.bekvon.bukkit.residence.containers.lm;
 import com.bekvon.bukkit.residence.economy.TransactionManager;
 import com.bekvon.bukkit.residence.economy.rent.RentableLand;
@@ -249,7 +250,9 @@ public class ResidenceManager implements ResidenceInterface {
 	Residence.getPlayerManager().addResidence(newRes.getOwner(), newRes);
 
 	if (player != null) {
-	    Residence.getSelectionManager().NewMakeBorders(player, newArea.getHighLoc(), newArea.getLowLoc(), false);
+	    Visualizer v = new Visualizer(player);
+	    v.setAreas(newArea);	    
+	    Residence.getSelectionManager().showBounds(player, v);
 	    Residence.getAutoSelectionManager().getList().remove(player.getName().toLowerCase());
 	    Residence.msg(player, lm.Area_Create, "main");
 	    Residence.msg(player, lm.Residence_Create, name);
@@ -293,14 +296,20 @@ public class ResidenceManager implements ResidenceInterface {
 	this.listResidences(sender, string, page, showhidden, false, showhidden);
     }
 
-    public void listResidences(final CommandSender sender, final String targetplayer, final int page, boolean showhidden, final boolean onlyHidden, boolean resadmin) {
+    public void listResidences(CommandSender sender, String targetplayer, int page, boolean showhidden, boolean onlyHidden, boolean resadmin) {
+	this.listResidences(sender, targetplayer, page, showhidden, onlyHidden, resadmin, null);
+    }
+
+    public void listResidences(CommandSender sender, String targetplayer, int page, boolean showhidden, boolean onlyHidden, boolean resadmin, World world) {
+	if (targetplayer == null)
+	    targetplayer = sender.getName();
 	if (showhidden && !Residence.isResAdminOn(sender) && !sender.getName().equalsIgnoreCase(targetplayer)) {
 	    showhidden = false;
 	} else if (sender.getName().equalsIgnoreCase(targetplayer))
 	    showhidden = true;
-	final boolean hidden = showhidden;
-	ArrayList<ClaimedResidence> ownedResidences = Residence.getPlayerManager().getResidences(targetplayer, hidden, onlyHidden);
-	ownedResidences.addAll(Residence.getRentManager().getRents(targetplayer, onlyHidden));
+	boolean hidden = showhidden;
+	ArrayList<ClaimedResidence> ownedResidences = Residence.getPlayerManager().getResidences(targetplayer, hidden, onlyHidden, world);
+	ownedResidences.addAll(Residence.getRentManager().getRents(targetplayer, onlyHidden, world));
 	InformationPager.printListInfo(sender, targetplayer, ownedResidences, page, resadmin);
     }
 
@@ -308,12 +317,17 @@ public class ResidenceManager implements ResidenceInterface {
 	this.listAllResidences(sender, page, false);
     }
 
+    public void listAllResidences(CommandSender sender, int page, boolean showhidden, World world) {
+	List<ClaimedResidence> list = getFromAllResidences(showhidden, false, world);
+	InformationPager.printListInfo(sender, null, list, page, showhidden);
+    }
+
     public void listAllResidences(CommandSender sender, int page, boolean showhidden) {
 	this.listAllResidences(sender, page, showhidden, false);
     }
 
     public void listAllResidences(CommandSender sender, int page, boolean showhidden, boolean onlyHidden) {
-	List<ClaimedResidence> list = getFromAllResidences(showhidden, onlyHidden);
+	List<ClaimedResidence> list = getFromAllResidences(showhidden, onlyHidden, null);
 	InformationPager.printListInfo(sender, null, list, page, showhidden);
     }
 
@@ -354,11 +368,13 @@ public class ResidenceManager implements ResidenceInterface {
 	return list;
     }
 
-    public ArrayList<ClaimedResidence> getFromAllResidences(boolean showhidden, boolean onlyHidden) {
+    public ArrayList<ClaimedResidence> getFromAllResidences(boolean showhidden, boolean onlyHidden, World world) {
 	ArrayList<ClaimedResidence> list = new ArrayList<>();
 	for (Entry<String, ClaimedResidence> res : residences.entrySet()) {
 	    boolean hidden = res.getValue().getPermissions().has("hidden", false);
 	    if (onlyHidden && !hidden)
+		continue;
+	    if (world != null && !world.getName().equalsIgnoreCase(res.getValue().getWorld()))
 		continue;
 	    if ((showhidden) || (!showhidden && !hidden)) {
 		list.add(res.getValue());
