@@ -12,10 +12,10 @@ import com.bekvon.bukkit.residence.permissions.PermissionGroup;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.UUID;
 
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
@@ -24,7 +24,8 @@ import org.bukkit.entity.Player;
 
 public class ResidencePermissions extends FlagPermissions {
 
-    protected String owner;
+    protected UUID ownerUUID;
+    protected String ownerLastKnownName;
     protected String world;
     protected ClaimedResidence residence;
 
@@ -431,6 +432,7 @@ public class ResidencePermissions extends FlagPermissions {
 	    return ownerLastKnownName;//return last known if we cannot find it
 	ownerLastKnownName = name;//update last known if we did find it
 	return name;
+    }
 
     public UUID getOwnerUUID() {
 	return ownerUUID;
@@ -453,14 +455,6 @@ public class ResidencePermissions extends FlagPermissions {
 	ResidencePermissions newperms = new ResidencePermissions(res);
 	//newperms.owner = (String) root.get("Owner");
 	if (root.containsKey("OwnerUUID")) {
-        FlagPermissions.load(root, newperms);
-        if(newperms.owner==null||newperms.world==null||newperms.playerFlags==null||newperms.groupFlags==null||newperms.cuboidFlags==null)
-            throw new Exception("Invalid Residence Permissions...");
-        newperms.fixNames();
-        return newperms;
-    }
-
-    public void fixNames()
 	    newperms.ownerUUID = UUID.fromString((String) root.get("OwnerUUID"));//get owner UUID
 	    //			String name = Residence.getPlayerName(newperms.ownerUUID); //try to find the current name of the owner
 	    newperms.ownerLastKnownName = (String) root.get("OwnerLastKnownName");//otherwise load last known name from file
@@ -494,7 +488,6 @@ public class ResidencePermissions extends FlagPermissions {
 	} else {
 	    newperms.ownerUUID = UUID.fromString(Residence.getServerLandUUID());//cant determine owner name or UUID... setting zero UUID which is server land
 	    newperms.ownerLastKnownName = Residence.getServerLandname();
-            playerFlags.put(name.toLowerCase(), get);
 	}
 	newperms.world = (String) root.get("World");
 	FlagPermissions.load(root, newperms);

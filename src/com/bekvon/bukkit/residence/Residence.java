@@ -35,7 +35,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.dynmap.DynmapAPI;
 
 import com.bekvon.bukkit.residence.chat.ChatManager;
 import com.bekvon.bukkit.residence.containers.ABInterface;
@@ -43,14 +42,7 @@ import com.bekvon.bukkit.residence.containers.Flags;
 import com.bekvon.bukkit.residence.containers.NMS;
 import com.bekvon.bukkit.residence.containers.ResidencePlayer;
 import com.bekvon.bukkit.residence.containers.lm;
-import com.bekvon.bukkit.residence.dynmap.DynMapListeners;
-import com.bekvon.bukkit.residence.dynmap.DynMapManager;
-import com.bekvon.bukkit.residence.economy.BOSEAdapter;
 import com.bekvon.bukkit.residence.economy.EconomyInterface;
-import com.bekvon.bukkit.residence.economy.EssentialsEcoAdapter;
-import com.bekvon.bukkit.residence.economy.IConomy5Adapter;
-import com.bekvon.bukkit.residence.economy.IConomy6Adapter;
-import com.bekvon.bukkit.residence.economy.RealShopEconomy;
 import com.bekvon.bukkit.residence.economy.TransactionManager;
 import com.bekvon.bukkit.residence.economy.rent.RentManager;
 import com.bekvon.bukkit.residence.gui.FlagUtil;
@@ -80,8 +72,6 @@ import com.bekvon.bukkit.residence.selection.WorldEditSelectionManager;
 import com.bekvon.bukkit.residence.shopStuff.ShopListener;
 import com.bekvon.bukkit.residence.shopStuff.ShopSignUtil;
 import com.bekvon.bukkit.residence.signsStuff.SignUtil;
-import com.bekvon.bukkit.residence.spout.ResidenceSpout;
-import com.bekvon.bukkit.residence.spout.ResidenceSpoutListener;
 import com.bekvon.bukkit.residence.text.Language;
 import com.bekvon.bukkit.residence.text.help.HelpEntry;
 import com.bekvon.bukkit.residence.utils.ActionBar;
@@ -94,17 +84,10 @@ import com.bekvon.bukkit.residence.utils.VersionChecker;
 import com.bekvon.bukkit.residence.utils.YmlMaker;
 import com.bekvon.bukkit.residence.vaultinterface.ResidenceVaultAdapter;
 import com.bekvon.bukkit.residence.api.*;
-import com.earth2me.essentials.Essentials;
-import com.griefcraft.lwc.LWC;
-import com.griefcraft.lwc.LWCPlugin;
 import com.residence.mcstats.Metrics;
 import com.residence.zip.ZipLibrary;
 import com.sk89q.worldedit.bukkit.WorldEditPlugin;
 import com.sk89q.worldguard.bukkit.WorldGuardPlugin;
-
-import cosine.boseconomy.BOSEconomy;
-import fr.crafter.tickleman.realeconomy.RealEconomy;
-import fr.crafter.tickleman.realplugin.RealPlugin;
 
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -132,8 +115,6 @@ public class Residence extends JavaPlugin {
     protected static ResidenceBlockListener blistener;
     protected static ResidencePlayerListener plistener;
     protected static ResidenceEntityListener elistener;
-    protected static ResidenceSpoutListener slistener;
-    protected static ResidenceSpout spout;
 
     protected static ResidenceFixesListener flistener;
 
@@ -154,7 +135,6 @@ public class Residence extends JavaPlugin {
     protected static FlagUtil FlagUtilManager;
     protected static ShopSignUtil ShopSignUtilManager;
     protected static RandomTp RandomTpManager;
-    protected static DynMapManager DynManager;
     protected static Sorting SortingManager;
     protected static ActionBar ABManager;
     protected static AutoSelection AutoSelectionManager;
@@ -193,7 +173,6 @@ public class Residence extends JavaPlugin {
 
     private static ABInterface ab;
     private static NMS nms;
-    static LWC lwc;
 
     public static HashMap<String, Long> rtMap = new HashMap<String, Long>();
     public static List<String> teleportDelayMap = new ArrayList<String>();
@@ -352,9 +331,6 @@ public class Residence extends JavaPlugin {
 	    server.getScheduler().cancelTask(rentBukkitId);
 	}
 
-	if (getDynManager() != null)
-	    getDynManager().getMarkerSet().deleteMarkerSet();
-
 	if (initsuccess) {
 	    try {
 		saveYml();
@@ -497,10 +473,6 @@ public class Residence extends JavaPlugin {
 
 	    versionChecker = new VersionChecker(this);
 
-	    Plugin lwcp = Bukkit.getPluginManager().getPlugin("LWC");
-	    if (lwcp != null)
-		lwc = ((LWCPlugin) lwcp).getLWC();
-
 	    for (String lang : validLanguages) {
 		YmlMaker langFile = new YmlMaker(this, "Language" + File.separator + lang + ".yml");
 		if (langFile != null) {
@@ -572,18 +544,6 @@ public class Residence extends JavaPlugin {
 		}
 		if (economy == null) {
 		    this.loadVaultEconomy();
-		}
-		if (economy == null) {
-		    this.loadBOSEconomy();
-		}
-		if (economy == null) {
-		    this.loadEssentialsEconomy();
-		}
-		if (economy == null) {
-		    this.loadRealEconomy();
-		}
-		if (economy == null) {
-		    this.loadIConomy();
 		}
 		if (economy == null) {
 		    Bukkit.getConsoleSender().sendMessage(Residence.prefix + " Unable to find an economy system...");
@@ -681,13 +641,6 @@ public class Residence extends JavaPlugin {
 		if (getVersionChecker().GetVersion() >= 11000)
 		    pm.registerEvents(new v1_10Events(), this);
 
-		// pm.registerEvent(Event.Type.WORLD_LOAD, wlistener,
-		// Priority.NORMAL, this);
-		if (cmanager.enableSpout()) {
-		    slistener = new ResidenceSpoutListener();
-		    pm.registerEvents(slistener, this);
-		    spout = new ResidenceSpout(this);
-		}
 		firstenable = false;
 	    } else {
 		plistener.reload();
@@ -709,15 +662,6 @@ public class Residence extends JavaPlugin {
 
 	    if (getServer().getPluginManager().getPlugin("CrackShot") != null)
 		getServer().getPluginManager().registerEvents(new CrackShot(), this);
-
-	    // DynMap
-	    Plugin dynmap = Bukkit.getPluginManager().getPlugin("dynmap");
-	    if (dynmap != null && getConfigManager().DynMapUse) {
-		DynManager = new DynMapManager(this);
-		getServer().getPluginManager().registerEvents(new DynMapListeners(), this);
-		getDynManager().api = (DynmapAPI) dynmap;
-		getDynManager().activate();
-	    }
 
 	    int autosaveInt = cmanager.getAutoSaveInterval();
 	    if (autosaveInt < 1) {
@@ -841,24 +785,12 @@ public class Residence extends JavaPlugin {
 	return versionChecker;
     }
 
-    public static LWC getLwc() {
-	return lwc;
-    }
-
     public static File getDataLocation() {
 	return dataFolder;
     }
 
     public static ShopSignUtil getShopSignUtilManager() {
 	return ShopSignUtilManager;
-    }
-
-    public static ResidenceSpout getSpout() {
-	return spout;
-    }
-
-    public static ResidenceSpoutListener getSpoutListener() {
-	return slistener;
     }
 
     public static CommandFiller getCommandFiller() {
@@ -887,10 +819,6 @@ public class Residence extends JavaPlugin {
 
     public static PermissionListManager getPermissionListManager() {
 	return pmanager;
-    }
-
-    public static DynMapManager getDynManager() {
-	return DynManager;
     }
 
     public static SchematicsManager getSchematicManager() {
@@ -1009,52 +937,6 @@ public class Residence extends JavaPlugin {
 	return wmanager.getPerms(loc.getWorld().getName());
     }
 
-    private void loadIConomy() {
-	Plugin p = getServer().getPluginManager().getPlugin("iConomy");
-	if (p != null) {
-	    if (p.getDescription().getVersion().startsWith("6")) {
-		economy = new IConomy6Adapter((com.iCo6.iConomy) p);
-	    } else if (p.getDescription().getVersion().startsWith("5")) {
-		economy = new IConomy5Adapter();
-	    } else {
-		Bukkit.getConsoleSender().sendMessage(Residence.prefix + " UNKNOWN iConomy version!");
-		return;
-	    }
-	    Bukkit.getConsoleSender().sendMessage(Residence.prefix + " Successfully linked with iConomy! Version: " + p.getDescription().getVersion());
-	} else {
-	    Bukkit.getConsoleSender().sendMessage(Residence.prefix + " iConomy NOT found!");
-	}
-    }
-
-    private void loadBOSEconomy() {
-	Plugin p = getServer().getPluginManager().getPlugin("BOSEconomy");
-	if (p != null) {
-	    economy = new BOSEAdapter((BOSEconomy) p);
-	    Bukkit.getConsoleSender().sendMessage(Residence.prefix + " Successfully linked with BOSEconomy!");
-	} else {
-	    Bukkit.getConsoleSender().sendMessage(Residence.prefix + " BOSEconomy NOT found!");
-	}
-    }
-
-    private void loadEssentialsEconomy() {
-	Plugin p = getServer().getPluginManager().getPlugin("Essentials");
-	if (p != null) {
-	    economy = new EssentialsEcoAdapter((Essentials) p);
-	    Bukkit.getConsoleSender().sendMessage(Residence.prefix + " Successfully linked with Essentials Economy!");
-	} else {
-	    Bukkit.getConsoleSender().sendMessage(Residence.prefix + " Essentials Economy NOT found!");
-	}
-    }
-
-    private void loadRealEconomy() {
-	Plugin p = getServer().getPluginManager().getPlugin("RealPlugin");
-	if (p != null) {
-	    economy = new RealShopEconomy(new RealEconomy((RealPlugin) p));
-	    Bukkit.getConsoleSender().sendMessage(Residence.prefix + " Successfully linked with RealShop Economy!");
-	} else {
-	    Bukkit.getConsoleSender().sendMessage(Residence.prefix + " RealShop Economy NOT found!");
-	}
-    }
 
     private void loadVaultEconomy() {
 	Plugin p = getServer().getPluginManager().getPlugin("Vault");

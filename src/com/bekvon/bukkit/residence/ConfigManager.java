@@ -1476,7 +1476,7 @@ public class ConfigManager {
     }
 
     public boolean enableSpout() {
-	return spoutEnable;
+	return false;
     }
 
     public boolean AutoMobRemoval() {

@@ -803,7 +803,7 @@ public class RentManager implements MarketRentInterface {
 
 	    if (!hover.equalsIgnoreCase(""))
 		Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "tellraw " + player.getName() + " {\"text\":\"\",\"extra\":[{\"text\":\"" + msg
-		    + "\",\"hoverEvent\":{\"action\":\"show_text\",\"value\":\"§2" + hover + "\"}}]}");
+		    + "\",\"hoverEvent\":{\"action\":\"show_text\",\"value\":\"" + ChatColor.DARK_GREEN + hover + "\"}}]}");
 	    else
 		player.sendMessage(msg);
 

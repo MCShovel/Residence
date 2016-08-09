@@ -4,8 +4,6 @@ import com.bekvon.bukkit.residence.Residence;
 import com.bekvon.bukkit.residence.containers.PlayerGroup;
 import com.bekvon.bukkit.residence.protection.FlagPermissions;
 import com.bekvon.bukkit.residence.vaultinterface.ResidenceVaultAdapter;
-import com.nijikokun.bukkit.Permissions.Permissions;
-import com.platymuus.bukkit.permissions.PermissionsPlugin;
 
 import java.io.File;
 import java.util.*;
@@ -156,30 +154,6 @@ public class PermissionManager {
 		return;
 	    }
 	    Bukkit.getConsoleSender().sendMessage(Residence.prefix + " Found Vault, but Vault reported no usable permissions system...");
-	}
-	p = server.getPluginManager().getPlugin("PermissionsBukkit");
-	if (p != null) {
-	    perms = new PermissionsBukkitAdapter((PermissionsPlugin) p);
-	    Bukkit.getConsoleSender().sendMessage(Residence.prefix + " Found PermissionsBukkit Plugin!");
-	    return;
-	}
-	p = server.getPluginManager().getPlugin("bPermissions");
-	if (p != null) {
-	    perms = new BPermissionsAdapter();
-	    Bukkit.getConsoleSender().sendMessage(Residence.prefix + " Found bPermissions Plugin!");
-	    return;
-	}
-	p = server.getPluginManager().getPlugin("Permissions");
-	if (p != null) {
-	    if (Residence.getConfigManager().useLegacyPermissions()) {
-		perms = new LegacyPermissions(((Permissions) p).getHandler());
-		Bukkit.getConsoleSender().sendMessage(Residence.prefix + " Found Permissions Plugin!");
-		Bukkit.getConsoleSender().sendMessage(Residence.prefix + "Permissions running in Legacy mode!");
-	    } else {
-		perms = new OriginalPermissions(((Permissions) p).getHandler());
-		Bukkit.getConsoleSender().sendMessage(Residence.prefix + " Found Permissions Plugin!");
-	    }
-	    return;
 	}
 	Bukkit.getConsoleSender().sendMessage(Residence.prefix + " Permissions plugin NOT FOUND!");
     }

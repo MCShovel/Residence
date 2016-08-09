@@ -900,8 +900,8 @@ public class ResidenceEntityListener implements Listener {
 	    player = (Player) ((Projectile) dmgr).getShooter();
 	} else if ((dmgr instanceof Projectile) && (!(((Projectile) dmgr).getShooter() instanceof Player))) {
 
-	    Location loc = event.getEntity().getLocation();
-	    FlagPermissions perm = Residence.getPermsByLoc(loc);
+	    Location loc1 = event.getEntity().getLocation();
+	    FlagPermissions perm = Residence.getPermsByLoc(loc1);
 
 	    if (!perm.has(Flags.destroy, true)) {
 		event.setCancelled(true);
@@ -918,12 +918,12 @@ public class ResidenceEntityListener implements Listener {
 	}
 
 	    		if (!res.getPermissions().playerHas(player.getName(), "container", true)) {
-	Location loc = event.getEntity().getLocation();
-	ClaimedResidence res = Residence.getResidenceManager().getByLoc(loc);
-	if (res == null)
+	Location loc1 = event.getEntity().getLocation();
+	ClaimedResidence res1 = Residence.getResidenceManager().getByLoc(loc1);
+	if (res1 == null)	
 	    return;
 
-	if (isMonster(dmgr) && !res.getPermissions().has(Flags.destroy, false)) {
+	if (isMonster(dmgr) && !res1.getPermissions().has(Flags.destroy, false)) {
 	    event.setCancelled(true);
 	    return;
 	}
@@ -935,13 +935,16 @@ public class ResidenceEntityListener implements Listener {
 	    return;
 
 	String pname = player.getName();
-	FlagPermissions perms = Residence.getPermsByLocForPlayer(loc, player);
-	String world = loc.getWorld().getName();
+	FlagPermissions perms = Residence.getPermsByLocForPlayer(loc1, player);
+	String world = loc1.getWorld().getName();
 	if (!perms.playerHas(pname, world, Flags.destroy, perms.playerHas(pname, world, Flags.build, true))) {
 	    event.setCancelled(true);
 	    Residence.msg(player, lm.Flag_Deny, Flags.destroy.getName());
 	}
+	    		}
+    		}
     }
+	
 
     
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)

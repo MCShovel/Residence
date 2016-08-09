@@ -37,8 +37,8 @@ public class check implements cmd {
 	if (!res.getPermissions().hasApplicableFlag(pname, args[2])) {
 	    Residence.msg(player, lm.Flag_CheckFalse, args[2], pname, args[1]);
 	} else {
-	    Residence.msg(player, lm.Flag_CheckTrue, args[2], pname, args[1], (res.getPermissions().playerHas(pname, res.getPermissions()
-		.getWorld(), args[2], false) ? Residence.msg(lm.General_True) : Residence.msg(lm.General_False)));
+	    Residence.msg(player, lm.Flag_CheckTrue, args[2], pname, args[1], (res.getPermissions().playerHas(pname, 
+	    		res.getPermissions().getWorld(), args[2], false) ? Residence.msg(lm.General_True) : Residence.msg(lm.General_False)));
 	}
 	return true;
     }
